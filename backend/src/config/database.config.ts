@@ -1,11 +1,14 @@
-import { createTablesIfNotExists } from "./dynamodb.config";
+import { testBlobStorageConnection } from "./azure-blob.config";
+import { createTablesIfNotExists, testConnection } from "./azure-sql.config";
 
 const connectDatabase = async () => {
   try {
+    await testConnection();
     await createTablesIfNotExists();
-    console.log("Connected to DynamoDB database");
+    await testBlobStorageConnection();
+    console.log("Connected to Azure SQL Database and Blob Storage");
   } catch (error) {
-    console.error("Error connecting to DynamoDB database:", error);
+    console.error("Error connecting to Azure services:", error);
     process.exit(1);
   }
 };

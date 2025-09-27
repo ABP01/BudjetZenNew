@@ -3,10 +3,10 @@ import { HTTPSTATUS } from "../config/http.config";
 import { DateRangePreset } from "../enums/date-range.enum";
 import { asyncHandler } from "../middlewares/asyncHandler.middlerware";
 import {
-    categoryAnalyticsService,
-    summaryAnalyticsService,
-    trendAnalyticsService,
-} from "../services/analytics.dynamodb";
+  chartAnalyticsService,
+  expensePieChartBreakdownService,
+  summaryAnalyticsService,
+} from "../services/analytics.service";
 
 export const summaryAnalyticsController = asyncHandler(
   async (req: Request, res: Response) => {
@@ -44,7 +44,7 @@ export const chartAnalyticsController = asyncHandler(
       customTo: to ? new Date(to as string) : undefined,
     };
 
-    const chartData = await trendAnalyticsService(
+    const chartData = await chartAnalyticsService(
       userId,
       filter.dateRangePreset,
       filter.customFrom,
@@ -68,7 +68,7 @@ export const expensePieChartBreakdownController = asyncHandler(
       customFrom: from ? new Date(from as string) : undefined,
       customTo: to ? new Date(to as string) : undefined,
     };
-    const pieChartData = await categoryAnalyticsService(
+    const pieChartData = await expensePieChartBreakdownService(
       userId,
       filter.dateRangePreset,
       filter.customFrom,

@@ -4,7 +4,7 @@ import { asyncHandler } from "../middlewares/asyncHandler.middlerware";
 import {
     findByIdUserService,
     updateUserService,
-} from "../services/user.dynamodb";
+} from "../services/user.service";
 import { updateUserSchema } from "../validators/user.validator";
 
 export const getCurrentUserController = asyncHandler(

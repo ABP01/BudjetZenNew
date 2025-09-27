@@ -1,5 +1,4 @@
-import { dynamoDB, TABLE_NAMES } from "../config/dynamodb.config";
-import { DynamoDBItem, DynamoDBService } from "../utils/dynamodb";
+import { SQLItem, SQLService } from "../utils/azure-sql";
 import { convertToCents, convertToDollarUnit } from "../utils/format-currency";
 
 export enum TransactionStatusEnum {
@@ -29,14 +28,7 @@ export enum PaymentMethodEnum {
   OTHER = "OTHER",
 }
 
-export interface TransactionDocument extends DynamoDBItem {
-  PK: string; // USER#{userId}
-  SK: string; // TRANSACTION#{transactionId}
-  GSI1PK: string; // USER#{userId}#TYPE#{type}
-  GSI1SK: string; // DATE#{date}#TRANSACTION#{transactionId}
-  GSI2PK: string; // USER#{userId}#CATEGORY#{category}
-  GSI2SK: string; // DATE#{date}#TRANSACTION#{transactionId}
-  userId: string;
+export interface TransactionDocument extends SQLItem {
   type: keyof typeof TransactionTypeEnum;
   title: string;
   amount: number;
@@ -53,7 +45,7 @@ export interface TransactionDocument extends DynamoDBItem {
 }
 
 export class TransactionModel {
-  private static dbService = new DynamoDBService(dynamoDB, TABLE_NAMES.TRANSACTIONS);
+  private static sqlService = new SQLService("transactions");
 
   // Create transaction
   static async create(transactionData: {
@@ -72,7 +64,7 @@ export class TransactionModel {
     status?: keyof typeof TransactionStatusEnum;
     paymentMethod?: keyof typeof PaymentMethodEnum;
   }): Promise<TransactionDocument> {
-    const transactionId = this.dbService.generateId();
+    const transactionId = this.sqlService.generateId();
     const now = new Date().toISOString();
     const date = transactionData.date || now;
     
@@ -80,12 +72,6 @@ export class TransactionModel {
     const amountInCents = convertToCents(transactionData.amount);
     
     const transaction: Partial<TransactionDocument> = {
-      PK: `USER#${transactionData.userId}`,
-      SK: `TRANSACTION#${transactionId}`,
-      GSI1PK: `USER#${transactionData.userId}#TYPE#${transactionData.type}`,
-      GSI1SK: `DATE#${date}#TRANSACTION#${transactionId}`,
-      GSI2PK: `USER#${transactionData.userId}#CATEGORY#${transactionData.category}`,
-      GSI2SK: `DATE#${date}#TRANSACTION#${transactionId}`,
       userId: transactionData.userId,
       type: transactionData.type,
       title: transactionData.title,
@@ -102,13 +88,13 @@ export class TransactionModel {
       paymentMethod: transactionData.paymentMethod || PaymentMethodEnum.CASH,
     };
 
-    const createdTransaction = await this.dbService.create(transaction);
+    const createdTransaction = await this.sqlService.create(transaction);
     return this.addGetters(createdTransaction);
   }
 
   // Find by ID
   static async findById(transactionId: string, userId: string): Promise<TransactionDocument | null> {
-    const transaction = await this.dbService.getById(`USER#${userId}`, `TRANSACTION#${transactionId}`);
+    const transaction = await this.sqlService.getById(transactionId, userId);
     return transaction ? this.addGetters(transaction) : null;
   }
 
@@ -121,51 +107,44 @@ export class TransactionModel {
       startDate?: string;
       endDate?: string;
       limit?: number;
-      lastKey?: any;
+      offset?: number;
     } = {}
-  ): Promise<{ items: TransactionDocument[]; lastKey?: any }> {
-    let items: TransactionDocument[] = [];
+  ): Promise<{ items: TransactionDocument[]; total: number }> {
+    const filters: { field: string; operator: string; value: any }[] = [];
 
+    // Add filters
     if (options.type) {
-      // Query by type using GSI1
-      const gsi1Items = await this.dbService.queryByGSI(
-        "GSI1",
-        `USER#${userId}#TYPE#${options.type}`
-      );
-      items = gsi1Items.map(item => this.addGetters(item));
-    } else if (options.category) {
-      // Query by category using GSI2
-      const gsi2Items = await this.dbService.queryByGSI(
-        "GSI2", 
-        `USER#${userId}#CATEGORY#${options.category}`
-      );
-      items = gsi2Items.map(item => this.addGetters(item));
-    } else {
-      // Query all transactions for user
-      items = await this.dbService.queryByPK(`USER#${userId}`);
-      items = items.filter(item => item.SK.startsWith("TRANSACTION#"));
-      items = items.map(item => this.addGetters(item));
+      filters.push({ field: "type", operator: "=", value: options.type });
     }
 
-    // Apply date filters
-    if (options.startDate || options.endDate) {
-      items = items.filter(item => {
-        const itemDate = new Date(item.date);
-        if (options.startDate && itemDate < new Date(options.startDate)) return false;
-        if (options.endDate && itemDate > new Date(options.endDate)) return false;
-        return true;
-      });
+    if (options.category) {
+      filters.push({ field: "category", operator: "=", value: options.category });
     }
 
-    // Sort by date (newest first)
-    items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-    // Apply limit
-    if (options.limit) {
-      items = items.slice(0, options.limit);
+    if (options.startDate) {
+      filters.push({ field: "date", operator: ">=", value: options.startDate });
     }
 
-    return { items, lastKey: undefined }; // Simplified pagination
+    if (options.endDate) {
+      filters.push({ field: "date", operator: "<=", value: options.endDate });
+    }
+
+    // Get total count
+    const total = await this.sqlService.count(userId);
+
+    // Get items with pagination
+    const items = await this.sqlService.queryWithFilters(
+      userId,
+      filters,
+      "date DESC",
+      options.limit,
+      options.offset
+    );
+
+    return {
+      items: items.map(item => this.addGetters(item)),
+      total,
+    };
   }
 
   // Find recurring transactions
@@ -173,16 +152,16 @@ export class TransactionModel {
     userId: string,
     beforeDate?: string
   ): Promise<TransactionDocument[]> {
-    const allTransactions = await this.dbService.queryByPK(`USER#${userId}`);
-    const recurringTransactions = allTransactions
-      .filter(item => 
-        item.SK.startsWith("TRANSACTION#") && 
-        item.isRecurring === true &&
-        (!beforeDate || new Date(item.nextRecurringDate || item.date) <= new Date(beforeDate))
-      )
-      .map(item => this.addGetters(item));
+    const filters: { field: string; operator: string; value: any }[] = [
+      { field: "isRecurring", operator: "=", value: true }
+    ];
 
-    return recurringTransactions;
+    if (beforeDate) {
+      filters.push({ field: "nextRecurringDate", operator: "<=", value: beforeDate });
+    }
+
+    const items = await this.sqlService.queryWithFilters(userId, filters, "date DESC");
+    return items.map(item => this.addGetters(item));
   }
 
   // Update transaction
@@ -210,46 +189,22 @@ export class TransactionModel {
       updates.amount = convertToCents(updates.amount);
     }
 
-    // Update GSI keys if type, category, or date changes
-    const currentTransaction = await this.findById(transactionId, userId);
-    if (!currentTransaction) return null;
-
-    const updateData: any = { ...updates };
-    
-    if (updates.type || updates.date) {
-      const newType = updates.type || currentTransaction.type;
-      const newDate = updates.date || currentTransaction.date;
-      updateData.GSI1PK = `USER#${userId}#TYPE#${newType}`;
-      updateData.GSI1SK = `DATE#${newDate}#TRANSACTION#${transactionId}`;
+    try {
+      const updatedTransaction = await this.sqlService.update(transactionId, userId, updates);
+      return updatedTransaction ? this.addGetters(updatedTransaction) : null;
+    } catch (error) {
+      return null;
     }
-
-    if (updates.category || updates.date) {
-      const newCategory = updates.category || currentTransaction.category;
-      const newDate = updates.date || currentTransaction.date;
-      updateData.GSI2PK = `USER#${userId}#CATEGORY#${newCategory}`;
-      updateData.GSI2SK = `DATE#${newDate}#TRANSACTION#${transactionId}`;
-    }
-
-    const updatedTransaction = await this.dbService.update(
-      `USER#${userId}`,
-      `TRANSACTION#${transactionId}`,
-      updateData
-    );
-
-    return this.addGetters(updatedTransaction);
   }
 
   // Delete transaction
   static async deleteById(transactionId: string, userId: string): Promise<void> {
-    await this.dbService.delete(`USER#${userId}`, `TRANSACTION#${transactionId}`);
+    await this.sqlService.delete(transactionId, userId);
   }
 
   // Bulk delete transactions
   static async bulkDelete(transactionIds: string[], userId: string): Promise<void> {
-    const deletePromises = transactionIds.map(id => 
-      this.deleteById(id, userId)
-    );
-    await Promise.all(deletePromises);
+    await this.sqlService.bulkDelete(transactionIds, userId);
   }
 
   // Bulk create transactions
@@ -272,17 +227,11 @@ export class TransactionModel {
     const now = new Date().toISOString();
     
     const transactionItems = transactions.map(transactionData => {
-      const transactionId = this.dbService.generateId();
+      const transactionId = this.sqlService.generateId();
       const date = transactionData.date || now;
       const amountInCents = convertToCents(transactionData.amount);
       
       return {
-        PK: `USER#${transactionData.userId}`,
-        SK: `TRANSACTION#${transactionId}`,
-        GSI1PK: `USER#${transactionData.userId}#TYPE#${transactionData.type}`,
-        GSI1SK: `DATE#${date}#TRANSACTION#${transactionId}`,
-        GSI2PK: `USER#${transactionData.userId}#CATEGORY#${transactionData.category}`,
-        GSI2SK: `DATE#${date}#TRANSACTION#${transactionId}`,
         userId: transactionData.userId,
         type: transactionData.type,
         title: transactionData.title,
@@ -302,12 +251,44 @@ export class TransactionModel {
       };
     });
 
-    await this.dbService.batchWrite(transactionItems);
+    await this.sqlService.bulkInsert(transactionItems);
     return transactionItems.map(item => this.addGetters(item));
   }
 
+  // Get transactions by category
+  static async findByCategory(
+    userId: string,
+    category: string,
+    limit: number = 10
+  ): Promise<TransactionDocument[]> {
+    const items = await this.sqlService.queryWithFilters(
+      userId,
+      [{ field: "category", operator: "=", value: category }],
+      "date DESC",
+      limit
+    );
+
+    return items.map(item => this.addGetters(item));
+  }
+
+  // Get transactions by type
+  static async findByType(
+    userId: string,
+    type: keyof typeof TransactionTypeEnum,
+    limit: number = 10
+  ): Promise<TransactionDocument[]> {
+    const items = await this.sqlService.queryWithFilters(
+      userId,
+      [{ field: "type", operator: "=", value: type }],
+      "date DESC",
+      limit
+    );
+
+    return items.map(item => this.addGetters(item));
+  }
+
   // Add getters for amount conversion
-  private static addGetters(transaction: DynamoDBItem): TransactionDocument {
+  private static addGetters(transaction: SQLItem): TransactionDocument {
     const transactionDoc = transaction as TransactionDocument;
     
     // Override amount getter to convert from cents to dollars
@@ -322,9 +303,106 @@ export class TransactionModel {
     return transactionDoc;
   }
 
-  // Extract transaction ID from SK
-  static extractTransactionId(SK: string): string {
-    return SK.replace("TRANSACTION#", "");
+  // Get transaction statistics
+  static async getStatistics(
+    userId: string,
+    startDate?: string,
+    endDate?: string
+  ): Promise<{
+    totalIncome: number;
+    totalExpense: number;
+    transactionCount: number;
+    averageAmount: number;
+  }> {
+    let query = `
+      SELECT 
+        type,
+        SUM(amount) as totalAmount,
+        COUNT(*) as count
+      FROM transactions 
+      WHERE userId = @userId
+    `;
+    
+    const params: { [key: string]: any } = { userId };
+
+    if (startDate) {
+      query += " AND date >= @startDate";
+      params.startDate = startDate;
+    }
+
+    if (endDate) {
+      query += " AND date <= @endDate";
+      params.endDate = endDate;
+    }
+
+    query += " GROUP BY type";
+
+    const results = await this.sqlService.executeQuery(query, params);
+    
+    let totalIncome = 0;
+    let totalExpense = 0;
+    let transactionCount = 0;
+
+    results.forEach(result => {
+      const amount = convertToDollarUnit(result.totalAmount);
+      transactionCount += result.count;
+      
+      if (result.type === TransactionTypeEnum.INCOME) {
+        totalIncome += amount;
+      } else {
+        totalExpense += amount;
+      }
+    });
+
+    const averageAmount = transactionCount > 0 ? (totalIncome + totalExpense) / transactionCount : 0;
+
+    return {
+      totalIncome,
+      totalExpense,
+      transactionCount,
+      averageAmount,
+    };
+  }
+
+  // Get monthly statistics
+  static async getMonthlyStatistics(
+    userId: string,
+    year: number
+  ): Promise<Array<{
+    month: number;
+    monthName: string;
+    totalIncome: number;
+    totalExpenses: number;
+    netIncome: number;
+    transactionCount: number;
+  }>> {
+    const query = `
+      SELECT 
+        MONTH(date) as month,
+        SUM(CASE WHEN type = 'INCOME' THEN amount ELSE 0 END) as totalIncome,
+        SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as totalExpenses,
+        COUNT(*) as transactionCount
+      FROM transactions 
+      WHERE userId = @userId AND YEAR(date) = @year
+      GROUP BY MONTH(date)
+      ORDER BY MONTH(date)
+    `;
+
+    const results = await this.sqlService.executeQuery(query, { userId, year });
+    
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+
+    return results.map(result => ({
+      month: result.month,
+      monthName: monthNames[result.month - 1],
+      totalIncome: convertToDollarUnit(result.totalIncome),
+      totalExpenses: convertToDollarUnit(result.totalExpenses),
+      netIncome: convertToDollarUnit(result.totalIncome) - convertToDollarUnit(result.totalExpenses),
+      transactionCount: result.transactionCount,
+    }));
   }
 }
 

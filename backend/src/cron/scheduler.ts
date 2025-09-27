@@ -1,6 +1,6 @@
 import cron from "node-cron";
-import { processReportJob } from "./jobs/report.dynamodb";
-import { processRecurringTransactions } from "./jobs/transaction.dynamodb";
+import { processReportJob } from "./jobs/report.job";
+import { processRecurringTransactions } from "./jobs/transaction.job";
 
 const scheduleJob = (name: string, time: string, job: Function) => {
   console.log(`Scheduling ${name} at ${time}`);

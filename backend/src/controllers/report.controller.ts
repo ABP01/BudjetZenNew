@@ -5,7 +5,7 @@ import {
     generateReportService,
     getAllReportsService,
     updateReportSettingService,
-} from "../services/report.dynamodb";
+} from "../services/report.service";
 import { updateReportSettingSchema } from "../validators/report.validator";
 
 export const getAllReportsController = asyncHandler(

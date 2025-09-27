@@ -1,12 +1,7 @@
-import { dynamoDB, TABLE_NAMES } from "../config/dynamodb.config";
+import { SQLItem, SQLService } from "../utils/azure-sql";
 import { compareValue, hashValue } from "../utils/bcrypt";
-import { DynamoDBItem, DynamoDBService } from "../utils/dynamodb";
 
-export interface UserDocument extends DynamoDBItem {
-  PK: string; // USER#{userId}
-  SK: string; // USER#{userId} (same as PK for single item)
-  GSI1PK: string; // EMAIL#{email} for email lookup
-  GSI1SK: string; // USER#{userId}
+export interface UserDocument extends SQLItem {
   name: string;
   email: string;
   password: string;
@@ -16,7 +11,7 @@ export interface UserDocument extends DynamoDBItem {
 }
 
 export class UserModel {
-  private static dbService = new DynamoDBService(dynamoDB, TABLE_NAMES.USERS);
+  private static sqlService = new SQLService("users");
 
   // Create user
   static async create(userData: {
@@ -25,42 +20,37 @@ export class UserModel {
     password: string;
     profilePicture?: string | null;
   }): Promise<UserDocument> {
-    const userId = this.dbService.generateId();
+    const userId = this.sqlService.generateId();
     const hashedPassword = await hashValue(userData.password);
     
     const user: Partial<UserDocument> = {
-      PK: `USER#${userId}`,
-      SK: `USER#${userId}`,
-      GSI1PK: `EMAIL#${userData.email.toLowerCase()}`,
-      GSI1SK: `USER#${userId}`,
+      userId,
       name: userData.name,
       email: userData.email.toLowerCase(),
       password: hashedPassword,
       profilePicture: userData.profilePicture || null,
     };
 
-    const createdUser = await this.dbService.create(user);
+    const createdUser = await this.sqlService.create(user);
     return this.addMethods(createdUser);
   }
 
   // Find by ID
   static async findById(userId: string): Promise<UserDocument | null> {
-    const user = await this.dbService.getById(`USER#${userId}`);
+    const user = await this.sqlService.getById(userId, userId);
     return user ? this.addMethods(user) : null;
   }
 
   // Find by email
   static async findByEmail(email: string): Promise<UserDocument | null> {
-    const users = await this.dbService.queryByGSI(
-      "GSI1", // Email index
-      `EMAIL#${email.toLowerCase()}`
+    const users = await this.sqlService.executeQuery(
+      "SELECT * FROM users WHERE email = @email",
+      { email: email.toLowerCase() }
     );
     
     if (users.length === 0) return null;
     
-    // Get the full user record
-    const user = await this.dbService.getById(users[0].PK, users[0].SK);
-    return user ? this.addMethods(user) : null;
+    return this.addMethods(users[0]);
   }
 
   // Update user
@@ -78,41 +68,26 @@ export class UserModel {
       updates.password = await hashValue(updates.password);
     }
 
-    // If email is being updated, we need to handle GSI1
+    // Convert email to lowercase if provided
     if (updates.email) {
-      const currentUser = await this.findById(userId);
-      if (!currentUser) return null;
+      updates.email = updates.email.toLowerCase();
+    }
 
-      // Update the user record
-      const updatedUser = await this.dbService.update(
-        `USER#${userId}`,
-        `USER#${userId}`,
-        {
-          ...updates,
-          email: updates.email.toLowerCase(),
-          GSI1PK: `EMAIL#${updates.email.toLowerCase()}`,
-        }
-      );
-
-      return this.addMethods(updatedUser);
-    } else {
-      const updatedUser = await this.dbService.update(
-        `USER#${userId}`,
-        `USER#${userId}`,
-        updates
-      );
-
-      return this.addMethods(updatedUser);
+    try {
+      const updatedUser = await this.sqlService.update(userId, userId, updates);
+      return updatedUser ? this.addMethods(updatedUser) : null;
+    } catch (error) {
+      return null;
     }
   }
 
   // Delete user
   static async deleteById(userId: string): Promise<void> {
-    await this.dbService.delete(`USER#${userId}`);
+    await this.sqlService.delete(userId, userId);
   }
 
   // Add methods to user object
-  private static addMethods(user: DynamoDBItem): UserDocument {
+  private static addMethods(user: SQLItem): UserDocument {
     const userDoc = user as UserDocument;
     
     userDoc.omitPassword = function(): Omit<UserDocument, "password"> {
@@ -127,9 +102,24 @@ export class UserModel {
     return userDoc;
   }
 
-  // Extract userId from PK
-  static extractUserId(PK: string): string {
-    return PK.replace("USER#", "");
+  // Get all users (for admin purposes)
+  static async findAll(): Promise<UserDocument[]> {
+    const users = await this.sqlService.executeQuery("SELECT * FROM users ORDER BY createdAt DESC");
+    return users.map(user => this.addMethods(user));
+  }
+
+  // Count users
+  static async count(): Promise<number> {
+    return await this.sqlService.count();
+  }
+
+  // Search users by name or email
+  static async search(searchTerm: string): Promise<UserDocument[]> {
+    const users = await this.sqlService.executeQuery(
+      "SELECT * FROM users WHERE name LIKE @searchTerm OR email LIKE @searchTerm ORDER BY createdAt DESC",
+      { searchTerm: `%${searchTerm}%` }
+    );
+    return users.map(user => this.addMethods(user));
   }
 }
 

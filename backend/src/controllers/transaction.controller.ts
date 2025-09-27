@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { HTTPSTATUS } from "../config/http.config";
 import { asyncHandler } from "../middlewares/asyncHandler.middlerware";
-import { TransactionTypeEnum } from "../models/transaction.dynamodb";
+import { TransactionTypeEnum } from "../models/transaction.model";
 import {
     bulkDeleteTransactionService,
     bulkTransactionService,
@@ -12,7 +12,7 @@ import {
     getTransactionByIdService,
     scanReceiptService,
     updateTransactionService,
-} from "../services/transaction.dynamodb";
+} from "../services/transaction.service";
 import {
     bulkDeleteTransactionSchema,
     bulkTransactionSchema,

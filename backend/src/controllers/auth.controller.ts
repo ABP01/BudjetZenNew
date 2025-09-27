@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { HTTPSTATUS } from "../config/http.config";
 import { asyncHandler } from "../middlewares/asyncHandler.middlerware";
-import { loginService, registerService } from "../services/auth.dynamodb";
+import { loginService, registerService } from "../services/auth.service";
 import { loginSchema, registerSchema } from "../validators/auth.validator";
 
 export const registerController = asyncHandler(

@@ -5,11 +5,17 @@ const envConfig = () => ({
 
   PORT: getEnv("PORT", "8000"),
   BASE_PATH: getEnv("BASE_PATH", "/api"),
-  // DynamoDB Configuration
-  AWS_REGION: getEnv("AWS_REGION", "us-east-1"),
-  AWS_ACCESS_KEY_ID: getEnv("AWS_ACCESS_KEY_ID"),
-  AWS_SECRET_ACCESS_KEY: getEnv("AWS_SECRET_ACCESS_KEY"),
-  DYNAMODB_ENDPOINT: getEnv("DYNAMODB_ENDPOINT"), // For local development
+  // Azure SQL Database Configuration
+  AZURE_SQL_SERVER: getEnv("AZURE_SQL_SERVER"),
+  AZURE_SQL_DATABASE: getEnv("AZURE_SQL_DATABASE"),
+  AZURE_SQL_USER: getEnv("AZURE_SQL_USER"),
+  AZURE_SQL_PASSWORD: getEnv("AZURE_SQL_PASSWORD"),
+
+  // Azure Blob Storage Configuration
+  AZURE_STORAGE_ACCOUNT: getEnv("AZURE_STORAGE_ACCOUNT"),
+  AZURE_STORAGE_KEY: getEnv("AZURE_STORAGE_KEY"),
+  AZURE_STORAGE_CONNECTION_STRING: getEnv("AZURE_STORAGE_CONNECTION_STRING", ""),
+  AZURE_STORAGE_SAS_URL: getEnv("AZURE_STORAGE_SAS_URL", ""),
 
   JWT_SECRET: getEnv("JWT_SECRET", "secert_jwt"),
   JWT_EXPIRES_IN: getEnv("JWT_EXPIRES_IN", "15m") as string,
