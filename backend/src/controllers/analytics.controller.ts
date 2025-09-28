@@ -3,14 +3,15 @@ import { HTTPSTATUS } from "../config/http.config";
 import { DateRangePreset } from "../enums/date-range.enum";
 import { asyncHandler } from "../middlewares/asyncHandler.middlerware";
 import {
-  chartAnalyticsService,
-  expensePieChartBreakdownService,
-  summaryAnalyticsService,
+    categoryAnalyticsService,
+    spendingPatternAnalyticsService,
+    summaryAnalyticsService,
 } from "../services/analytics.service";
 
 export const summaryAnalyticsController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.user?._id;
+    const userId = req.user?.userId;
+    if (!userId) throw new Error("User not authenticated");
 
     const { preset, from, to } = req.query;
 
@@ -33,9 +34,11 @@ export const summaryAnalyticsController = asyncHandler(
   }
 );
 
-export const chartAnalyticsController = asyncHandler(
+export const categoryAnalyticsController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.user?._id;
+    const userId = req.user?.userId;
+    if (!userId) throw new Error("User not authenticated");
+    
     const { preset, from, to } = req.query;
 
     const filter = {
@@ -44,7 +47,7 @@ export const chartAnalyticsController = asyncHandler(
       customTo: to ? new Date(to as string) : undefined,
     };
 
-    const chartData = await chartAnalyticsService(
+    const chartData = await categoryAnalyticsService(
       userId,
       filter.dateRangePreset,
       filter.customFrom,
@@ -52,15 +55,17 @@ export const chartAnalyticsController = asyncHandler(
     );
 
     return res.status(HTTPSTATUS.OK).json({
-      message: "Chart fetched successfully",
+      message: "Category analytics fetched successfully",
       data: chartData,
     });
   }
 );
 
-export const expensePieChartBreakdownController = asyncHandler(
+export const spendingPatternController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.user?._id;
+    const userId = req.user?.userId;
+    if (!userId) throw new Error("User not authenticated");
+    
     const { preset, from, to } = req.query;
 
     const filter = {
@@ -68,7 +73,7 @@ export const expensePieChartBreakdownController = asyncHandler(
       customFrom: from ? new Date(from as string) : undefined,
       customTo: to ? new Date(to as string) : undefined,
     };
-    const pieChartData = await expensePieChartBreakdownService(
+    const patternData = await spendingPatternAnalyticsService(
       userId,
       filter.dateRangePreset,
       filter.customFrom,
@@ -76,8 +81,8 @@ export const expensePieChartBreakdownController = asyncHandler(
     );
 
     return res.status(HTTPSTATUS.OK).json({
-      message: "Expense breakdown fetched successfully",
-      data: pieChartData,
+      message: "Spending pattern fetched successfully",
+      data: patternData,
     });
   }
 );

@@ -1,14 +1,14 @@
 import { Router } from "express";
 import {
-  chartAnalyticsController,
-  expensePieChartBreakdownController,
-  summaryAnalyticsController,
+    categoryAnalyticsController,
+    spendingPatternController,
+    summaryAnalyticsController,
 } from "../controllers/analytics.controller";
 
 const analyticsRoutes = Router();
 
 analyticsRoutes.get("/summary", summaryAnalyticsController);
-analyticsRoutes.get("/chart", chartAnalyticsController);
-analyticsRoutes.get("/expense-breakdown", expensePieChartBreakdownController);
+analyticsRoutes.get("/category", categoryAnalyticsController);
+analyticsRoutes.get("/spending-pattern", spendingPatternController);
 
 export default analyticsRoutes;

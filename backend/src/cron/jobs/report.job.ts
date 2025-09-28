@@ -1,11 +1,10 @@
 import { endOfMonth, format, startOfMonth, subMonths } from "date-fns";
-import ReportSettingModel from "../../models/report-setting.model";
-import { UserDocument } from "../../models/user.model";
-import mongoose from "mongoose";
-import { generateReportService } from "../../services/report.service";
-import ReportModel, { ReportStatusEnum } from "../../models/report.model";
-import { calulateNextReportDate } from "../../utils/helper";
 import { sendReportEmail } from "../../mailers/report.mailer";
+import ReportSettingModel from "../../models/report-setting.sql";
+import ReportModel, { ReportStatusEnum } from "../../models/report.sql";
+import UserModel from "../../models/user.sql";
+import { generateReportService } from "../../services/report.service";
+import { calulateNextReportDate } from "../../utils/helper";
 
 export const processReportJob = async () => {
   const now = new Date();
@@ -22,26 +21,19 @@ export const processReportJob = async () => {
   // const to = "2025-04-T23:00:00.000Z";
 
   try {
-    const reportSettingCursor = ReportSettingModel.find({
-      isEnabled: true,
-      nextReportDate: { $lte: now },
-    })
-      .populate<{ userId: UserDocument }>("userId")
-      .cursor();
+    const reportSettings = await ReportSettingModel.findSettingsNeedingReports(now.toISOString());
 
     console.log("Running report ");
 
-    for await (const setting of reportSettingCursor) {
-      const user = setting.userId as UserDocument;
+    for (const setting of reportSettings) {
+      const user = await UserModel.findById(setting.userId);
       if (!user) {
-        console.log(`User not found for setting: ${setting._id}`);
+        console.log(`User not found for setting: ${setting.id}`);
         continue;
       }
 
-      const session = await mongoose.startSession();
-
       try {
-        const report = await generateReportService(user.id, from, to);
+        const report = await generateReportService(user.userId, from, to);
 
         console.log(report, "resport data");
 
@@ -68,85 +60,40 @@ export const processReportJob = async () => {
           }
         }
 
-        await session.withTransaction(
-          async () => {
-            const bulkReports: any[] = [];
-            const bulkSettings: any[] = [];
+        if (report && emailSent) {
+          // Create report record
+          await ReportModel.create({
+            userId: user.userId,
+            period: report.period,
+            sentDate: now.toISOString(),
+            status: ReportStatusEnum.SENT,
+          });
 
-            if (report && emailSent) {
-              bulkReports.push({
-                insertOne: {
-                  document: {
-                    userId: user.id,
-                    sentDate: now,
-                    period: report.period,
-                    status: ReportStatusEnum.SENT,
-                    createdAt: now,
-                    updatedAt: now,
-                  },
-                },
-              });
+          // Update report setting
+          await ReportSettingModel.updateByUserId(user.userId, {
+            lastSentDate: now.toISOString(),
+            nextReportDate: calulateNextReportDate(now).toISOString(),
+          });
+        } else {
+          // Create failed report record
+          await ReportModel.create({
+            userId: user.userId,
+            period: report?.period || `${format(from, "MMMM d")}–${format(to, "d, yyyy")}`,
+            sentDate: now.toISOString(),
+            status: report ? ReportStatusEnum.FAILED : ReportStatusEnum.PENDING,
+          });
 
-              bulkSettings.push({
-                updateOne: {
-                  filter: { _id: setting._id },
-                  update: {
-                    $set: {
-                      lastSentDate: now,
-                      nextReportDate: calulateNextReportDate(now),
-                      updatedAt: now,
-                    },
-                  },
-                },
-              });
-            } else {
-              bulkReports.push({
-                insertOne: {
-                  document: {
-                    userId: user.id,
-                    sentDate: now,
-                    period:
-                      report?.period ||
-                      `${format(from, "MMMM d")}–${format(to, "d, yyyy")}`,
-                    status: report
-                      ? ReportStatusEnum.FAILED
-                      : ReportStatusEnum.NO_ACTIVITY,
-                    createdAt: now,
-                    updatedAt: now,
-                  },
-                },
-              });
-
-              bulkSettings.push({
-                updateOne: {
-                  filter: { _id: setting._id },
-                  update: {
-                    $set: {
-                      lastSentDate: null,
-                      nextReportDate: calulateNextReportDate(now),
-                      updatedAt: now,
-                    },
-                  },
-                },
-              });
-            }
-
-            await Promise.all([
-              ReportModel.bulkWrite(bulkReports, { ordered: false }),
-              ReportSettingModel.bulkWrite(bulkSettings, { ordered: false }),
-            ]);
-          },
-          {
-            maxCommitTimeMS: 10000,
-          }
-        );
+          // Update report setting for next attempt
+          await ReportSettingModel.updateByUserId(user.userId, {
+            lastSentDate: undefined,
+            nextReportDate: calulateNextReportDate(now).toISOString(),
+          });
+        }
 
         processedCount++;
       } catch (error) {
         console.log(`Failed to process report`, error);
         failedCount++;
-      } finally {
-        await session.endSession();
       }
     }
 

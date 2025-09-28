@@ -1,4 +1,4 @@
-import UserModel from "../models/user.model";
+import UserModel from "../models/user.sql";
 import { NotFoundException } from "../utils/app-error";
 import { UpdateUserType } from "../validators/user.validator";
 
@@ -15,15 +15,16 @@ export const updateUserService = async (
   const user = await UserModel.findById(userId);
   if (!user) throw new NotFoundException("User not found");
 
+  const updates: any = {
+    name: body.name,
+  };
+
   if (profilePic) {
-    user.profilePicture = profilePic.path;
+    updates.profilePicture = profilePic.path;
   }
 
-  user.set({
-    name: body.name,
-  });
+  const updatedUser = await UserModel.updateById(userId, updates);
+  if (!updatedUser) throw new NotFoundException("Failed to update user");
 
-  await user.save();
-
-  return user.omitPassword();
+  return updatedUser.omitPassword();
 };

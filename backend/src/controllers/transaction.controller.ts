@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { HTTPSTATUS } from "../config/http.config";
 import { asyncHandler } from "../middlewares/asyncHandler.middlerware";
-import { TransactionTypeEnum } from "../models/transaction.model";
+import { TransactionTypeEnum } from "../models/transaction.sql";
 import {
     bulkDeleteTransactionService,
     bulkTransactionService,
@@ -24,7 +24,8 @@ import {
 export const createTransactionController = asyncHandler(
   async (req: Request, res: Response) => {
     const body = createTransactionSchema.parse(req.body);
-    const userId = req.user?._id;
+    const userId = req.user?.userId;
+    if (!userId) throw new Error("User not authenticated");
 
     const transaction = await createTransactionService(body, userId);
 
@@ -37,7 +38,8 @@ export const createTransactionController = asyncHandler(
 
 export const getAllTransactionController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.user?._id;
+    const userId = req.user?.userId;
+    if (!userId) throw new Error("User not authenticated");
 
     const filters = {
       keyword: req.query.keyword as string | undefined,
@@ -64,7 +66,8 @@ export const getAllTransactionController = asyncHandler(
 
 export const getTransactionByIdController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.user?._id;
+    const userId = req.user?.userId;
+    if (!userId) throw new Error("User not authenticated");
     const transactionId = transactionIdSchema.parse(req.params.id);
 
     const transaction = await getTransactionByIdService(userId, transactionId);
@@ -78,7 +81,8 @@ export const getTransactionByIdController = asyncHandler(
 
 export const duplicateTransactionController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.user?._id;
+    const userId = req.user?.userId;
+    if (!userId) throw new Error("User not authenticated");
     const transactionId = transactionIdSchema.parse(req.params.id);
 
     const transaction = await duplicateTransactionService(
@@ -95,7 +99,8 @@ export const duplicateTransactionController = asyncHandler(
 
 export const updateTransactionController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.user?._id;
+    const userId = req.user?.userId;
+    if (!userId) throw new Error("User not authenticated");
     const transactionId = transactionIdSchema.parse(req.params.id);
     const body = updateTransactionSchema.parse(req.body);
 
@@ -109,7 +114,8 @@ export const updateTransactionController = asyncHandler(
 
 export const deleteTransactionController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.user?._id;
+    const userId = req.user?.userId;
+    if (!userId) throw new Error("User not authenticated");
     const transactionId = transactionIdSchema.parse(req.params.id);
 
     await deleteTransactionService(userId, transactionId);
@@ -122,7 +128,8 @@ export const deleteTransactionController = asyncHandler(
 
 export const bulkDeleteTransactionController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.user?._id;
+    const userId = req.user?.userId;
+    if (!userId) throw new Error("User not authenticated");
     const { transactionIds } = bulkDeleteTransactionSchema.parse(req.body);
 
     const result = await bulkDeleteTransactionService(userId, transactionIds);
@@ -136,7 +143,8 @@ export const bulkDeleteTransactionController = asyncHandler(
 
 export const bulkTransactionController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.user?._id;
+    const userId = req.user?.userId;
+    if (!userId) throw new Error("User not authenticated");
     const { transactions } = bulkTransactionSchema.parse(req.body);
 
     const result = await bulkTransactionService(userId, transactions);

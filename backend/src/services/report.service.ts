@@ -1,17 +1,16 @@
-import mongoose from "mongoose";
-import ReportSettingModel from "../models/report-setting.model";
-import ReportModel from "../models/report.model";
-import TransactionModel, {
-  TransactionTypeEnum,
-} from "../models/transaction.model";
-import { NotFoundException } from "../utils/app-error";
-import { calulateNextReportDate } from "../utils/helper";
-import { UpdateReportSettingType } from "../validators/report.validator";
-import { convertToDollarUnit } from "../utils/format-currency";
+import { createUserContent } from "@google/genai";
 import { format } from "date-fns";
 import { genAI, genAIModel } from "../config/google-ai.config";
-import { createUserContent } from "@google/genai";
+import ReportSettingModel from "../models/report-setting.sql";
+import ReportModel from "../models/report.sql";
+import TransactionModel, {
+  TransactionTypeEnum,
+} from "../models/transaction.sql";
+import { NotFoundException } from "../utils/app-error";
+import { convertToDollarUnit } from "../utils/format-currency";
+import { calulateNextReportDate } from "../utils/helper";
 import { reportInsightPrompt } from "../utils/prompt";
+import { UpdateReportSettingType } from "../validators/report.validator";
 
 export const getAllReportsService = async (
   userId: string,
@@ -20,16 +19,14 @@ export const getAllReportsService = async (
     pageNumber: number;
   }
 ) => {
-  const query: Record<string, any> = { userId };
-
   const { pageSize, pageNumber } = pagination;
-  const skip = (pageNumber - 1) * pageSize;
+  const offset = (pageNumber - 1) * pageSize;
 
-  const [reports, totalCount] = await Promise.all([
-    ReportModel.find(query).skip(skip).limit(pageSize).sort({ createdAt: -1 }),
-    ReportModel.countDocuments(query),
-  ]);
+  const reports = await ReportModel.findByUserId(userId, {
+    limit: pageSize,
+  });
 
+  const totalCount = await ReportModel.countByStatus(userId, "SENT");
   const totalPages = Math.ceil(totalCount / pageSize);
 
   return {
@@ -39,7 +36,7 @@ export const getAllReportsService = async (
       pageNumber,
       totalCount,
       totalPages,
-      skip,
+      skip: offset,
     },
   };
 };
@@ -49,24 +46,19 @@ export const updateReportSettingService = async (
   body: UpdateReportSettingType
 ) => {
   const { isEnabled } = body;
-  let nextReportDate: Date | null = null;
+  let nextReportDate: string | undefined = undefined;
 
-  const existingReportSetting = await ReportSettingModel.findOne({
-    userId,
-  });
+  const existingReportSetting = await ReportSettingModel.findByUserId(userId);
   if (!existingReportSetting)
     throw new NotFoundException("Report setting not found");
-
-  //   const frequency =
-  //     existingReportSetting.frequency || ReportFrequencyEnum.MONTHLY;
 
   if (isEnabled) {
     const currentNextReportDate = existingReportSetting.nextReportDate;
     const now = new Date();
-    if (!currentNextReportDate || currentNextReportDate <= now) {
+    if (!currentNextReportDate || new Date(currentNextReportDate) <= now) {
       nextReportDate = calulateNextReportDate(
-        existingReportSetting.lastSentDate
-      );
+        existingReportSetting.lastSentDate ? new Date(existingReportSetting.lastSentDate) : undefined
+      ).toISOString();
     } else {
       nextReportDate = currentNextReportDate;
     }
@@ -74,12 +66,10 @@ export const updateReportSettingService = async (
 
   console.log(nextReportDate, "nextReportDate");
 
-  existingReportSetting.set({
+  await ReportSettingModel.updateByUserId(userId, {
     ...body,
     nextReportDate,
   });
-
-  await existingReportSetting.save();
 };
 
 export const generateReportService = async (
@@ -87,99 +77,47 @@ export const generateReportService = async (
   fromDate: Date,
   toDate: Date
 ) => {
-  const results = await TransactionModel.aggregate([
-    {
-      $match: {
-        userId: new mongoose.Types.ObjectId(userId),
-        date: { $gte: fromDate, $lte: toDate },
-      },
-    },
-    {
-      $facet: {
-        summary: [
-          {
-            $group: {
-              _id: null,
-              totalIncome: {
-                $sum: {
-                  $cond: [
-                    { $eq: ["$type", TransactionTypeEnum.INCOME] },
-                    { $abs: "$amount" },
-                    0,
-                  ],
-                },
-              },
+  // Get transactions for the date range
+  const transactions = await TransactionModel.findByUserId(userId, {
+    startDate: fromDate.toISOString(),
+    endDate: toDate.toISOString(),
+  });
 
-              totalExpenses: {
-                $sum: {
-                  $cond: [
-                    { $eq: ["$type", TransactionTypeEnum.EXPENSE] },
-                    { $abs: "$amount" },
-                    0,
-                  ],
-                },
-              },
-            },
-          },
-        ],
+  if (transactions.items.length === 0) return null;
 
-        categories: [
-          {
-            $match: { type: TransactionTypeEnum.EXPENSE },
-          },
-          {
-            $group: {
-              _id: "$category",
-              total: { $sum: { $abs: "$amount" } },
-            },
-          },
-          {
-            $sort: { total: -1 },
-          },
-          {
-            $limit: 5,
-          },
-        ],
-      },
-    },
-    {
-      $project: {
-        totalIncome: {
-          $arrayElemAt: ["$summary.totalIncome", 0],
-        },
-        totalExpenses: {
-          $arrayElemAt: ["$summary.totalExpenses", 0],
-        },
-        categories: 1,
-      },
-    },
-  ]);
+  // Calculate summary
+  let totalIncome = 0;
+  let totalExpenses = 0;
+  const categoryTotals: { [key: string]: number } = {};
 
-  if (
-    !results?.length ||
-    (results[0]?.totalIncome === 0 && results[0]?.totalExpenses === 0)
-  )
-    return null;
+  transactions.items.forEach(transaction => {
+    const amount = transaction.amount;
 
-  const {
-    totalIncome = 0,
-    totalExpenses = 0,
-    categories = [],
-  } = results[0] || {};
+    if (transaction.type === TransactionTypeEnum.INCOME) {
+      totalIncome += amount;
+    } else {
+      totalExpenses += amount;
+      
+      // Track category totals for expenses
+      if (!categoryTotals[transaction.category]) {
+        categoryTotals[transaction.category] = 0;
+      }
+      categoryTotals[transaction.category] += amount;
+    }
+  });
 
-  console.log(results[0], "results");
-
-  const byCategory = categories.reduce(
-    (acc: any, { _id, total }: any) => {
-      acc[_id] = {
-        amount: convertToDollarUnit(total),
-        percentage:
-          totalExpenses > 0 ? Math.round((total / totalExpenses) * 100) : 0,
-      };
+  const byCategory = Object.entries(categoryTotals)
+    .map(([category, total]) => ({
+      category,
+      amount: convertToDollarUnit(total),
+      percentage: totalExpenses > 0 ? Math.round((total / totalExpenses) * 100) : 0,
+    }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 5)
+    .reduce((acc, { category, amount, percentage }) => {
+      acc[category] = { amount, percentage };
       return acc;
-    },
-    {} as Record<string, { amount: number; percentage: number }>
-  );
+    }, {} as Record<string, { amount: number; percentage: number }>);
 
   const availableBalance = totalIncome - totalExpenses;
   const savingsRate = calculateSavingRate(totalIncome, totalExpenses);

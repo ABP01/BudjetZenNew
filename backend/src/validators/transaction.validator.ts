@@ -1,9 +1,9 @@
 import { z } from "zod";
 import {
-  PaymentMethodEnum,
-  RecurringIntervalEnum,
-  TransactionTypeEnum,
-} from "../models/transaction.model";
+    PaymentMethodEnum,
+    RecurringIntervalEnum,
+    TransactionTypeEnum,
+} from "../models/transaction.sql";
 
 export const transactionIdSchema = z.string().trim().min(1);
 

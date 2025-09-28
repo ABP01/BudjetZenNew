@@ -1,16 +1,16 @@
+import { createPartFromBase64, createUserContent } from "@google/genai";
 import axios from "axios";
+import { genAI, genAIModel } from "../config/google-ai.config";
 import TransactionModel, {
-  TransactionTypeEnum,
-} from "../models/transaction.model";
+    TransactionTypeEnum,
+} from "../models/transaction.sql";
 import { BadRequestException, NotFoundException } from "../utils/app-error";
 import { calculateNextOccurrence } from "../utils/helper";
-import {
-  CreateTransactionType,
-  UpdateTransactionType,
-} from "../validators/transaction.validator";
-import { genAI, genAIModel } from "../config/google-ai.config";
-import { createPartFromBase64, createUserContent } from "@google/genai";
 import { receiptPrompt } from "../utils/prompt";
+import {
+    CreateTransactionType,
+    UpdateTransactionType,
+} from "../validators/transaction.validator";
 
 export const createTransactionService = async (
   body: CreateTransactionType,

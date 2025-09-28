@@ -2,14 +2,15 @@ import { Request, Response } from "express";
 import { HTTPSTATUS } from "../config/http.config";
 import { asyncHandler } from "../middlewares/asyncHandler.middlerware";
 import {
-    findByIdUserService,
-    updateUserService,
+  findByIdUserService,
+  updateUserService,
 } from "../services/user.service";
 import { updateUserSchema } from "../validators/user.validator";
 
 export const getCurrentUserController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.user?._id;
+    const userId = req.user?.userId;
+    if (!userId) throw new Error("User not authenticated");
 
     const user = await findByIdUserService(userId);
     return res.status(HTTPSTATUS.OK).json({
@@ -22,7 +23,8 @@ export const getCurrentUserController = asyncHandler(
 export const updateUserController = asyncHandler(
   async (req: Request, res: Response) => {
     const body = updateUserSchema.parse(req.body);
-    const userId = req.user?._id;
+    const userId = req.user?.userId;
+    if (!userId) throw new Error("User not authenticated");
     const profilePic = req.file;
 
     const user = await updateUserService(userId, body, profilePic);

@@ -10,7 +10,8 @@ import { updateReportSettingSchema } from "../validators/report.validator";
 
 export const getAllReportsController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.user?._id;
+    const userId = req.user?.userId;
+    if (!userId) throw new Error("User not authenticated");
 
     const pagination = {
       pageSize: parseInt(req.query.pageSize as string) || 20,
@@ -28,7 +29,8 @@ export const getAllReportsController = asyncHandler(
 
 export const updateReportSettingController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.user?._id;
+    const userId = req.user?.userId;
+    if (!userId) throw new Error("User not authenticated");
     const body = updateReportSettingSchema.parse(req.body);
 
     await updateReportSettingService(userId, body);
@@ -41,7 +43,8 @@ export const updateReportSettingController = asyncHandler(
 
 export const generateReportController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.user?._id;
+    const userId = req.user?.userId;
+    if (!userId) throw new Error("User not authenticated");
     const { from, to } = req.query;
     const fromDate = new Date(from as string);
     const toDate = new Date(to as string);
