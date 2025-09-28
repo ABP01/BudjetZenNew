@@ -15,7 +15,6 @@ import authRoutes from "./routes/auth.route";
 import reportRoutes from "./routes/report.route";
 import transactionRoutes from "./routes/transaction.route";
 import userRoutes from "./routes/user.route";
-import { BadRequestException } from "./utils/app-error";
 
 const app = express();
 const BASE_PATH = Env.BASE_PATH;
@@ -27,7 +26,24 @@ app.use(passport.initialize());
 
 app.use(
   cors({
-    origin: Env.FRONTEND_ORIGIN,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      
+      const allowedOrigins = [
+        Env.FRONTEND_ORIGIN,
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173"
+      ];
+      
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      
+      return callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
   })
 );
@@ -35,7 +51,6 @@ app.use(
 app.get(
   "/",
   asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-    throw new BadRequestException("This is a test error");
     res.status(HTTPSTATUS.OK).json({
       message: "Hello Subcribe to the channel",
     });

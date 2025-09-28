@@ -32,7 +32,7 @@ const envConfig = () => ({
   RESEND_API_KEY: getEnv("RESEND_API_KEY"),
   RESEND_MAILER_SENDER: getEnv("RESEND_MAILER_SENDER", ""),
 
-  FRONTEND_ORIGIN: getEnv("FRONTEND_ORIGIN", "localhost"),
+  FRONTEND_ORIGIN: getEnv("FRONTEND_ORIGIN", "http://localhost:5173"),
 });
 
 export const Env = envConfig();
