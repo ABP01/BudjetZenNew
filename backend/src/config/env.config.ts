@@ -17,11 +17,6 @@ const envConfig = () => ({
   AZURE_STORAGE_CONNECTION_STRING: getEnv("AZURE_STORAGE_CONNECTION_STRING", ""),
   AZURE_STORAGE_SAS_URL: getEnv("AZURE_STORAGE_SAS_URL", ""),
 
-  JWT_SECRET: getEnv("JWT_SECRET", "secert_jwt"),
-  JWT_EXPIRES_IN: getEnv("JWT_EXPIRES_IN", "15m") as string,
-
-  JWT_REFRESH_SECRET: getEnv("JWT_REFRESH_SECRET", "secert_jwt_refresh"),
-  JWT_REFRESH_EXPIRES_IN: getEnv("JWT_REFRESH_EXPIRES_IN", "7d") as string,
 
   GEMINI_API_KEY: getEnv("GEMINI_API_KEY"),
 

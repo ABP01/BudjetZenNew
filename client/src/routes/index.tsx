@@ -1,16 +1,14 @@
+import AppLayout from "@/layouts/app-layout";
+import BaseLayout from "@/layouts/base-layout";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import AuthRoute from "./authRoute";
 import {
   authenticationRoutePaths,
   protectedRoutePaths,
 } from "./common/routes";
-import AppLayout from "@/layouts/app-layout";
-import BaseLayout from "@/layouts/base-layout";
-import AuthRoute from "./authRoute";
 import ProtectedRoute from "./protectedRoute";
-import useAuthExpiration from "@/hooks/use-auth-expiration";
 
 function AppRoutes() {
-  useAuthExpiration();
   return (
     <BrowserRouter>
       <Routes>

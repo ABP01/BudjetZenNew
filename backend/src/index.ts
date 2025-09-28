@@ -1,12 +1,10 @@
 import cors from "cors";
 import "dotenv/config";
 import express, { NextFunction, Request, Response } from "express";
-import passport from "passport";
+
 import connectDatabase from "./config/database.config";
 import { Env } from "./config/env.config";
 import { HTTPSTATUS } from "./config/http.config";
-import "./config/passport.config";
-import { passportAuthenticateJwt } from "./config/passport.config";
 import { initializeCrons } from "./cron";
 import { asyncHandler } from "./middlewares/asyncHandler.middlerware";
 import { errorHandler } from "./middlewares/errorHandler.middleware";
@@ -22,7 +20,7 @@ const BASE_PATH = Env.BASE_PATH;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use(passport.initialize());
+
 
 app.use(
   cors({
@@ -58,10 +56,10 @@ app.get(
 );
 
 app.use(`${BASE_PATH}/auth`, authRoutes);
-app.use(`${BASE_PATH}/user`, passportAuthenticateJwt, userRoutes);
-app.use(`${BASE_PATH}/transaction`, passportAuthenticateJwt, transactionRoutes);
-app.use(`${BASE_PATH}/report`, passportAuthenticateJwt, reportRoutes);
-app.use(`${BASE_PATH}/analytics`, passportAuthenticateJwt, analyticsRoutes);
+app.use(`${BASE_PATH}/user`, userRoutes);
+app.use(`${BASE_PATH}/transaction`, transactionRoutes);
+app.use(`${BASE_PATH}/report`, reportRoutes);
+app.use(`${BASE_PATH}/analytics`, analyticsRoutes);
 
 app.use(errorHandler);
 

@@ -3,15 +3,15 @@ import { HTTPSTATUS } from "../config/http.config";
 import { DateRangePreset } from "../enums/date-range.enum";
 import { asyncHandler } from "../middlewares/asyncHandler.middlerware";
 import {
-    categoryAnalyticsService,
-    spendingPatternAnalyticsService,
-    summaryAnalyticsService,
+  categoryAnalyticsService,
+  spendingPatternAnalyticsService,
+  summaryAnalyticsService,
 } from "../services/analytics.service";
 
 export const summaryAnalyticsController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.user?.userId;
-    if (!userId) throw new Error("User not authenticated");
+    const userId = req.params.userId || req.body.userId;
+    if (!userId) throw new Error("User ID is required");
 
     const { preset, from, to } = req.query;
 
@@ -36,8 +36,8 @@ export const summaryAnalyticsController = asyncHandler(
 
 export const categoryAnalyticsController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.user?.userId;
-    if (!userId) throw new Error("User not authenticated");
+    const userId = req.params.userId || req.body.userId;
+    if (!userId) throw new Error("User ID is required");
     
     const { preset, from, to } = req.query;
 
@@ -63,8 +63,8 @@ export const categoryAnalyticsController = asyncHandler(
 
 export const spendingPatternController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.user?.userId;
-    if (!userId) throw new Error("User not authenticated");
+    const userId = req.params.userId || req.body.userId;
+    if (!userId) throw new Error("User ID is required");
     
     const { preset, from, to } = req.query;
 

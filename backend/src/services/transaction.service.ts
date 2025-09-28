@@ -2,21 +2,21 @@ import { createPartFromBase64, createUserContent } from "@google/genai";
 import axios from "axios";
 import { genAI, genAIModel } from "../config/google-ai.config";
 import TransactionModel, {
-    TransactionTypeEnum,
+  TransactionTypeEnum,
 } from "../models/transaction.sql";
 import { BadRequestException, NotFoundException } from "../utils/app-error";
 import { calculateNextOccurrence } from "../utils/helper";
 import { receiptPrompt } from "../utils/prompt";
 import {
-    CreateTransactionType,
-    UpdateTransactionType,
+  CreateTransactionType,
+  UpdateTransactionType,
 } from "../validators/transaction.validator";
 
 export const createTransactionService = async (
   body: CreateTransactionType,
   userId: string
 ) => {
-  let nextRecurringDate: Date | undefined;
+  let nextRecurringDate: string | undefined;
   const currentDate = new Date();
 
   if (body.isRecurring && body.recurringInterval) {
@@ -27,8 +27,8 @@ export const createTransactionService = async (
 
     nextRecurringDate =
       calulatedDate < currentDate
-        ? calculateNextOccurrence(currentDate, body.recurringInterval)
-        : calulatedDate;
+        ? calculateNextOccurrence(currentDate, body.recurringInterval).toISOString()
+        : calulatedDate.toISOString();
   }
 
   const transaction = await TransactionModel.create({
@@ -37,9 +37,10 @@ export const createTransactionService = async (
     category: body.category,
     amount: Number(body.amount),
     isRecurring: body.isRecurring || false,
-    recurringInterval: body.recurringInterval || null,
+    recurringInterval: body.recurringInterval || undefined,
     nextRecurringDate,
-    lastProcessed: null,
+    lastProcessed: undefined,
+    date: body.date ? (typeof body.date === 'string' ? body.date : body.date.toISOString()) : new Date().toISOString(),
   });
 
   return transaction;
@@ -57,52 +58,34 @@ export const getAllTransactionService = async (
     pageNumber: number;
   }
 ) => {
-  const { keyword, type, recurringStatus } = filters;
+  const { pageSize, pageNumber } = pagination;
+  const offset = (pageNumber - 1) * pageSize;
 
-  const filterConditions: Record<string, any> = {
-    userId,
+  const options: any = {
+    limit: pageSize,
+    offset: offset,
   };
 
-  if (keyword) {
-    filterConditions.$or = [
-      { title: { $regex: keyword, $options: "i" } },
-      { category: { $regex: keyword, $options: "i" } },
-    ];
+  // Add filters
+  if (filters.type) {
+    options.type = filters.type;
   }
 
-  if (type) {
-    filterConditions.type = type;
+  if (filters.recurringStatus) {
+    options.isRecurring = filters.recurringStatus === "RECURRING";
   }
 
-  if (recurringStatus) {
-    if (recurringStatus === "RECURRING") {
-      filterConditions.isRecurring = true;
-    } else if (recurringStatus === "NON_RECURRING") {
-      filterConditions.isRecurring = false;
-    }
-  }
-
-  const { pageSize, pageNumber } = pagination;
-  const skip = (pageNumber - 1) * pageSize;
-
-  const [transations, totalCount] = await Promise.all([
-    TransactionModel.find(filterConditions)
-      .skip(skip)
-      .limit(pageSize)
-      .sort({ createdAt: -1 }),
-    TransactionModel.countDocuments(filterConditions),
-  ]);
-
-  const totalPages = Math.ceil(totalCount / pageSize);
+  const result = await TransactionModel.findByUserId(userId, options);
+  const totalPages = Math.ceil(result.total / pageSize);
 
   return {
-    transations,
+    transations: result.items,
     pagination: {
       pageSize,
       pageNumber,
-      totalCount,
+      totalCount: result.total,
       totalPages,
-      skip,
+      skip: offset,
     },
   };
 };
@@ -111,10 +94,7 @@ export const getTransactionByIdService = async (
   userId: string,
   transactionId: string
 ) => {
-  const transaction = await TransactionModel.findOne({
-    _id: transactionId,
-    userId,
-  });
+  const transaction = await TransactionModel.findById(transactionId, userId);
   if (!transaction) throw new NotFoundException("Transaction not found");
 
   return transaction;
@@ -124,24 +104,25 @@ export const duplicateTransactionService = async (
   userId: string,
   transactionId: string
 ) => {
-  const transaction = await TransactionModel.findOne({
-    _id: transactionId,
-    userId,
-  });
+  const transaction = await TransactionModel.findById(transactionId, userId);
   if (!transaction) throw new NotFoundException("Transaction not found");
 
   const duplicated = await TransactionModel.create({
-    ...transaction.toObject(),
-    _id: undefined,
+    userId: transaction.userId,
+    type: transaction.type,
     title: `Duplicate - ${transaction.title}`,
+    amount: transaction.amount,
+    category: transaction.category,
+    receiptUrl: transaction.receiptUrl,
     description: transaction.description
       ? `${transaction.description} (Duplicate)`
       : "Duplicated transaction",
+    date: transaction.date,
+    status: transaction.status,
+    paymentMethod: transaction.paymentMethod,
     isRecurring: false,
     recurringInterval: undefined,
     nextRecurringDate: undefined,
-    createdAt: undefined,
-    updatedAt: undefined,
   });
 
   return duplicated;
@@ -152,10 +133,7 @@ export const updateTransactionService = async (
   transactionId: string,
   body: UpdateTransactionType
 ) => {
-  const existingTransaction = await TransactionModel.findOne({
-    _id: transactionId,
-    userId,
-  });
+  const existingTransaction = await TransactionModel.findById(transactionId, userId);
   if (!existingTransaction)
     throw new NotFoundException("Transaction not found");
 
@@ -163,36 +141,36 @@ export const updateTransactionService = async (
   const isRecurring = body.isRecurring ?? existingTransaction.isRecurring;
 
   const date =
-    body.date !== undefined ? new Date(body.date) : existingTransaction.date;
+    body.date !== undefined ? body.date : existingTransaction.date;
 
   const recurringInterval =
     body.recurringInterval || existingTransaction.recurringInterval;
 
-  let nextRecurringDate: Date | undefined;
+  let nextRecurringDate: string | undefined;
 
   if (isRecurring && recurringInterval) {
-    const calulatedDate = calculateNextOccurrence(date, recurringInterval);
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    const calulatedDate = calculateNextOccurrence(dateObj, recurringInterval);
 
     nextRecurringDate =
       calulatedDate < now
-        ? calculateNextOccurrence(now, recurringInterval)
-        : calulatedDate;
+        ? calculateNextOccurrence(now, recurringInterval).toISOString()
+        : calulatedDate.toISOString();
   }
 
-  existingTransaction.set({
-    ...(body.title && { title: body.title }),
-    ...(body.description && { description: body.description }),
-    ...(body.category && { category: body.category }),
-    ...(body.type && { type: body.type }),
-    ...(body.paymentMethod && { paymentMethod: body.paymentMethod }),
-    ...(body.amount !== undefined && { amount: Number(body.amount) }),
-    date,
-    isRecurring,
-    recurringInterval,
-    nextRecurringDate,
-  });
+  const updates: any = {};
+  if (body.title) updates.title = body.title;
+  if (body.description) updates.description = body.description;
+  if (body.category) updates.category = body.category;
+  if (body.type) updates.type = body.type;
+  if (body.paymentMethod) updates.paymentMethod = body.paymentMethod;
+  if (body.amount !== undefined) updates.amount = Number(body.amount);
+  updates.date = date;
+  updates.isRecurring = isRecurring;
+  updates.recurringInterval = recurringInterval;
+  updates.nextRecurringDate = nextRecurringDate;
 
-  await existingTransaction.save();
+  await TransactionModel.updateById(transactionId, userId, updates);
 
   return;
 };
@@ -201,12 +179,10 @@ export const deleteTransactionService = async (
   userId: string,
   transactionId: string
 ) => {
-  const deleted = await TransactionModel.findByIdAndDelete({
-    _id: transactionId,
-    userId,
-  });
-  if (!deleted) throw new NotFoundException("Transaction not found");
+  const existing = await TransactionModel.findById(transactionId, userId);
+  if (!existing) throw new NotFoundException("Transaction not found");
 
+  await TransactionModel.deleteById(transactionId, userId);
   return;
 };
 
@@ -214,17 +190,11 @@ export const bulkDeleteTransactionService = async (
   userId: string,
   transactionIds: string[]
 ) => {
-  const result = await TransactionModel.deleteMany({
-    _id: { $in: transactionIds },
-    userId,
-  });
-
-  if (result.deletedCount === 0)
-    throw new NotFoundException("No transations found");
+  await TransactionModel.bulkDelete(transactionIds, userId);
 
   return {
     sucess: true,
-    deletedCount: result.deletedCount,
+    deletedCount: transactionIds.length,
   };
 };
 
@@ -233,27 +203,20 @@ export const bulkTransactionService = async (
   transactions: CreateTransactionType[]
 ) => {
   try {
-    const bulkOps = transactions.map((tx) => ({
-      insertOne: {
-        document: {
-          ...tx,
-          userId,
-          isRecurring: false,
-          nextRecurringDate: null,
-          recurringInterval: null,
-          lastProcesses: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      },
+    const transactionData = transactions.map((tx) => ({
+      ...tx,
+      userId,
+      isRecurring: false,
+      nextRecurringDate: undefined,
+      recurringInterval: undefined,
+      lastProcessed: undefined,
+      date: tx.date ? (typeof tx.date === 'string' ? tx.date : tx.date.toISOString()) : new Date().toISOString(),
     }));
 
-    const result = await TransactionModel.bulkWrite(bulkOps, {
-      ordered: true,
-    });
+    const result = await TransactionModel.bulkCreate(transactionData);
 
     return {
-      insertedCount: result.insertedCount,
+      insertedCount: result.length,
       success: true,
     };
   } catch (error) {

@@ -111,7 +111,7 @@ export class ReportSettingModel {
       return updated!;
     } else {
       // Create new
-      return await this.create(reportSettingData);
+      return await this.create({ ...reportSettingData, userId });
     }
   }
 

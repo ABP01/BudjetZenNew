@@ -17,25 +17,10 @@ export const authApi = apiClient.injectEndpoints({
       }),
     }),
 
-    //skip
-    logout: builder.mutation({
-      query: () => ({
-        url: "/auth/logout",
-        method: "POST",
-      }),
-    }),
-    refresh: builder.mutation({
-      query: () => ({
-        url: "/auth/refresh-token",
-        method: "POST",
-      }),
-    }),
   }),
 });
 
 export const {
   useLoginMutation,
   useRegisterMutation,
-  useRefreshMutation,
-  useLogoutMutation,
 } = authApi;

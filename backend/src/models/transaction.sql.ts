@@ -232,6 +232,7 @@ export class TransactionModel {
       const amountInCents = convertToCents(transactionData.amount);
       
       return {
+        id: transactionId,
         userId: transactionData.userId,
         type: transactionData.type,
         title: transactionData.title,
@@ -246,8 +247,8 @@ export class TransactionModel {
         date: date,
         status: transactionData.status || TransactionStatusEnum.COMPLETED,
         paymentMethod: transactionData.paymentMethod || PaymentMethodEnum.CASH,
-        createdAt: now,
-        updatedAt: now,
+        createdAt: new Date(now),
+        updatedAt: new Date(now),
       };
     });
 

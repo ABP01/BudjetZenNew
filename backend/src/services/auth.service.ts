@@ -4,7 +4,6 @@ import ReportSettingModel, {
 import UserModel from "../models/user.sql";
 import { NotFoundException, UnauthorizedException } from "../utils/app-error";
 import { calulateNextReportDate } from "../utils/helper";
-import { signJwtToken } from "../utils/jwt";
 import {
   LoginSchemaType,
   RegisterSchemaType,
@@ -51,14 +50,10 @@ export const loginService = async (body: LoginSchemaType) => {
   if (!isPasswordValid)
     throw new UnauthorizedException("Invalid email/password");
 
-  const { token, expiresAt } = signJwtToken({ userId: user.userId });
-
   const reportSetting = await ReportSettingModel.findByUserId(user.userId);
 
   return {
     user: user.omitPassword(),
-    accessToken: token,
-    expiresAt,
     reportSetting,
   };
 };
