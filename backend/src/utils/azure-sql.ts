@@ -45,7 +45,7 @@ export class SQLService {
       VALUES (@id, ${valuePlaceholders})
     `;
 
-    const result = await request.query(query);
+    // Set parameters before executing query
     request.input('id', TYPES.UniqueIdentifier, id);
     
     columns.forEach((column, index) => {
