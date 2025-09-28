@@ -1,14 +1,14 @@
-import { useState } from "react";
-import { Menu } from "lucide-react";
-import { NavLink, useLocation } from "react-router-dom";
-import { PROTECTED_ROUTES } from "@/routes/common/routePath";
+import { useTypedSelector } from "@/app/hook";
 import { cn } from "@/lib/utils";
+import { PROTECTED_ROUTES } from "@/routes/common/routePath";
+import { Menu } from "lucide-react";
+import { useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
 import Logo from "../logo/logo";
 import { Button } from "../ui/button";
 import { Sheet, SheetContent } from "../ui/sheet";
-import { UserNav } from "./user-nav";
 import LogoutDialog from "./logout-dialog";
-import { useTypedSelector } from "@/app/hook";
+import { UserNav } from "./user-nav";
 
 const Navbar = () => {
   const { pathname } = useLocation();
@@ -65,6 +65,7 @@ const Navbar = () => {
             <nav className="hidden md:flex items-center gap-x-2 overflow-x-auto">
               {routes?.map((route) => (
                 <Button
+                  key={route.href}
                   size="sm"
                   variant="ghost"
                   className={cn(
@@ -77,7 +78,7 @@ const Navbar = () => {
                   )}
                   asChild
                 >
-                  <NavLink key={route.href} to={route.href}>
+                  <NavLink to={route.href}>
                     {route.label}
                   </NavLink>
                 </Button>
@@ -90,6 +91,7 @@ const Navbar = () => {
                 <nav className="flex flex-col gap-y-2 pt-9">
                   {routes?.map((route) => (
                     <Button
+                      key={route.href}
                       size="sm"
                       variant="ghost"
                       className={cn(
@@ -101,7 +103,7 @@ const Navbar = () => {
                       )}
                       asChild
                     >
-                      <NavLink key={route.href} to={route.href}>
+                      <NavLink to={route.href}>
                         {route.label}
                       </NavLink>
                     </Button>

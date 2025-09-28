@@ -2,29 +2,29 @@ import { Request, Response } from "express";
 import { HTTPSTATUS } from "../config/http.config";
 import { asyncHandler } from "../middlewares/asyncHandler.middlerware";
 import { TransactionTypeEnum } from "../models/transaction.sql";
+import { mockGetAllTransactionService } from "../services/mock-transaction.service";
 import {
-    bulkDeleteTransactionService,
-    bulkTransactionService,
-    createTransactionService,
-    deleteTransactionService,
-    duplicateTransactionService,
-    getAllTransactionService,
-    getTransactionByIdService,
-    scanReceiptService,
-    updateTransactionService,
+  bulkDeleteTransactionService,
+  bulkTransactionService,
+  createTransactionService,
+  deleteTransactionService,
+  duplicateTransactionService,
+  getTransactionByIdService,
+  scanReceiptService,
+  updateTransactionService
 } from "../services/transaction.service";
 import {
-    bulkDeleteTransactionSchema,
-    bulkTransactionSchema,
-    createTransactionSchema,
-    transactionIdSchema,
-    updateTransactionSchema,
+  bulkDeleteTransactionSchema,
+  bulkTransactionSchema,
+  createTransactionSchema,
+  transactionIdSchema,
+  updateTransactionSchema,
 } from "../validators/transaction.validator";
 
 export const createTransactionController = asyncHandler(
   async (req: Request, res: Response) => {
     const body = createTransactionSchema.parse(req.body);
-    const userId = req.params.userId || req.body.userId;
+    const userId = req.userId;
     if (!userId) throw new Error("User ID is required");
 
     const transaction = await createTransactionService(body, userId);
@@ -38,7 +38,7 @@ export const createTransactionController = asyncHandler(
 
 export const getAllTransactionController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.params.userId || req.body.userId;
+    const userId = req.userId;
     if (!userId) throw new Error("User ID is required");
 
     const filters = {
@@ -55,7 +55,7 @@ export const getAllTransactionController = asyncHandler(
       pageNumber: parseInt(req.query.pageNumber as string) || 1,
     };
 
-    const result = await getAllTransactionService(userId, filters, pagination);
+    const result = await mockGetAllTransactionService(userId, filters, pagination);
 
     return res.status(HTTPSTATUS.OK).json({
       message: "Transaction fetched successfully",
@@ -66,7 +66,7 @@ export const getAllTransactionController = asyncHandler(
 
 export const getTransactionByIdController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.params.userId || req.body.userId;
+    const userId = req.userId;
     if (!userId) throw new Error("User ID is required");
     const transactionId = transactionIdSchema.parse(req.params.id);
 
@@ -81,7 +81,7 @@ export const getTransactionByIdController = asyncHandler(
 
 export const duplicateTransactionController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.params.userId || req.body.userId;
+    const userId = req.userId;
     if (!userId) throw new Error("User ID is required");
     const transactionId = transactionIdSchema.parse(req.params.id);
 
@@ -99,7 +99,7 @@ export const duplicateTransactionController = asyncHandler(
 
 export const updateTransactionController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.params.userId || req.body.userId;
+    const userId = req.userId;
     if (!userId) throw new Error("User ID is required");
     const transactionId = transactionIdSchema.parse(req.params.id);
     const body = updateTransactionSchema.parse(req.body);
@@ -114,7 +114,7 @@ export const updateTransactionController = asyncHandler(
 
 export const deleteTransactionController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.params.userId || req.body.userId;
+    const userId = req.userId;
     if (!userId) throw new Error("User ID is required");
     const transactionId = transactionIdSchema.parse(req.params.id);
 
@@ -128,7 +128,7 @@ export const deleteTransactionController = asyncHandler(
 
 export const bulkDeleteTransactionController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.params.userId || req.body.userId;
+    const userId = req.userId;
     if (!userId) throw new Error("User ID is required");
     const { transactionIds } = bulkDeleteTransactionSchema.parse(req.body);
 
@@ -143,7 +143,7 @@ export const bulkDeleteTransactionController = asyncHandler(
 
 export const bulkTransactionController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.params.userId || req.body.userId;
+    const userId = req.userId;
     if (!userId) throw new Error("User ID is required");
     const { transactions } = bulkTransactionSchema.parse(req.body);
 

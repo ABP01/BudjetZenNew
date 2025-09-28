@@ -3,14 +3,14 @@ import { HTTPSTATUS } from "../config/http.config";
 import { DateRangePreset } from "../enums/date-range.enum";
 import { asyncHandler } from "../middlewares/asyncHandler.middlerware";
 import {
-  categoryAnalyticsService,
-  spendingPatternAnalyticsService,
-  summaryAnalyticsService,
-} from "../services/analytics.service";
+  mockCategoryAnalyticsService,
+  mockSpendingPatternAnalyticsService,
+  mockSummaryAnalyticsService,
+} from "../services/mock-analytics.service";
 
 export const summaryAnalyticsController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.params.userId || req.body.userId;
+    const userId = req.userId;
     if (!userId) throw new Error("User ID is required");
 
     const { preset, from, to } = req.query;
@@ -20,7 +20,7 @@ export const summaryAnalyticsController = asyncHandler(
       customFrom: from ? new Date(from as string) : undefined,
       customTo: to ? new Date(to as string) : undefined,
     };
-    const stats = await summaryAnalyticsService(
+    const stats = await mockSummaryAnalyticsService(
       userId,
       filter.dateRangePreset,
       filter.customFrom,
@@ -36,7 +36,7 @@ export const summaryAnalyticsController = asyncHandler(
 
 export const categoryAnalyticsController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.params.userId || req.body.userId;
+    const userId = req.userId;
     if (!userId) throw new Error("User ID is required");
     
     const { preset, from, to } = req.query;
@@ -47,7 +47,7 @@ export const categoryAnalyticsController = asyncHandler(
       customTo: to ? new Date(to as string) : undefined,
     };
 
-    const chartData = await categoryAnalyticsService(
+    const chartData = await mockCategoryAnalyticsService(
       userId,
       filter.dateRangePreset,
       filter.customFrom,
@@ -63,7 +63,7 @@ export const categoryAnalyticsController = asyncHandler(
 
 export const spendingPatternController = asyncHandler(
   async (req: Request, res: Response) => {
-    const userId = req.params.userId || req.body.userId;
+    const userId = req.userId;
     if (!userId) throw new Error("User ID is required");
     
     const { preset, from, to } = req.query;
@@ -73,7 +73,7 @@ export const spendingPatternController = asyncHandler(
       customFrom: from ? new Date(from as string) : undefined,
       customTo: to ? new Date(to as string) : undefined,
     };
-    const patternData = await spendingPatternAnalyticsService(
+    const patternData = await mockSpendingPatternAnalyticsService(
       userId,
       filter.dateRangePreset,
       filter.customFrom,
