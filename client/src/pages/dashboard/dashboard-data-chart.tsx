@@ -1,28 +1,28 @@
-import * as React from "react";
-import { format } from "date-fns";
-import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { DateRangeType } from "@/components/date-range-select";
+import { EmptyState } from "@/components/empty-state";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
 } from "@/components/ui/card";
 import {
-  ChartConfig,
-  ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
-  ChartTooltip,
-  ChartTooltipContent,
+    ChartConfig,
+    ChartContainer,
+    ChartLegend,
+    ChartLegendContent,
+    ChartTooltip,
+    ChartTooltipContent,
 } from "@/components/ui/chart";
-import { EmptyState } from "@/components/empty-state";
-import { TrendingUpIcon, TrendingDownIcon } from "lucide-react";
-import { DateRangeType } from "@/components/date-range-select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency } from "@/lib/format-currency";
 import { useChartAnalyticsQuery } from "@/features/analytics/analyticsAPI";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { formatCurrency } from "@/lib/format-currency";
+import { format } from "date-fns";
+import { TrendingDownIcon, TrendingUpIcon } from "lucide-react";
+import * as React from "react";
+import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
 
 interface PropsType {
   dateRange?: DateRangeType;
